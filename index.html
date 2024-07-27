@@ -1,29 +1,174 @@
 <!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <link rel="stylesheet" href="css/pico.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.colors.min.css">
     <title>Micropython LVGL</title>
+    <style>
+        button {
+            width: 50%;
+            height: 100px;
+        }
+    </style>
 </head>
+
 <body>
     <main class="container">
         <center>
-        <h1>Micropython LVGL for Cheap Yellow Display</h1>
-        <h2>V1</h2>
-        <script
-        type="module"
-        src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
-        ></script>
-        <esp-web-install-button
-        manifest="bin/manifest.json"
-        ></esp-web-install-button>
-        <br><br>
-        <a href="https://github.com/usini/micropython_lvgl_cyd">Github</a>
-    </center>
+            <h1>Micropython LVGL for Cheap Yellow Display</h1>
+            <h2>V1</h2>
+            <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+            <esp-web-install-button manifest="bin/manifest.json">
+                <button slot="activate">Install</button>
+            </esp-web-install-button>
+            <br><br>
+            <button onclick="serial.begin()" class="pico-background-pink-500">Test</button>
+            <br><br>
+            <a href="https://github.com/usini/micropython_lvgl_cyd">Github</a>
+        </center>
     </main>
 </body>
+
 </html>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/usini/esprerial/dist/esprerial.min.js"></script>
+<script>
+    serial = new Esprerial();
+    init_lvgl_code = `
+import ili9XXX
+import lvgl as lv
+import lv_utils
+import machine
+lv.init()
+disp = ili9XXX.ili9341()
+disp.init()
+import xpt2046
+touch = xpt2046.xpt2046()
+    `
 
+    test_code = `
+import ili9XXX
+import lvgl as lv
+import lv_utils
+import machine
+lv.init()
+disp = ili9XXX.ili9341()
+disp.init()
+import xpt2046
+touch = xpt2046.xpt2046()
 
+scr = lv.obj()
+lv.screen_load(scr)
+
+slider = lv.slider(scr)
+slider.set_width(150)
+slider.align(lv.ALIGN.TOP_MID, 0, 15)
+
+led1 = lv.led(scr)
+led1.align(lv.ALIGN.CENTER, 0, 0)
+led1.set_brightness(slider.get_value() * 2)
+# led1.set_drag(True)
+led1.set_size(20,20)
+
+def slider_event_cb(event):
+    led1.set_brightness(slider.get_value() * 2)
+
+slider.add_event_cb(slider_event_cb, lv.EVENT.VALUE_CHANGED, None)
+
+# Create a Spinner object
+spin = lv.spinner(scr)
+spin.set_anim_params(1000, 100)
+spin.set_size(100, 100)
+spin.align(lv.ALIGN.CENTER, 0, 0)
+`
+current_program = [];
+current_line = 0;
+program_inprogress = false;
+in_function = false;
+prepare(test_code);
+    function serial_read(message) {
+        console.log("--> " + message);
+        if(message == 'Type "help()" for more information.'){
+            ready();
+            next_line();
+        }
+        if(message.includes(">>>") || message.includes("...")){
+            if(message.includes("...")){
+                in_function = true;
+            }
+            console.log("OK");
+            if(program_inprogress){
+                current_line++;
+                next_line();
+            }
+        }
+    }
+
+    function init_lvgl(){
+        write(init_lvgl_code);
+    }
+
+    function next_line(){
+        if(current_line < current_program.length){
+            if(current_program[current_line] == ""){
+                if(in_function = true){
+                    in_function = false;
+                    console.log("Get out of function");
+                    serial.write("\x08\n");
+                    return;
+                }
+            }
+            serial.write(current_program[current_line]);
+        } else {
+            program_inprogress = false;
+            console.log("End of program");
+        }
+    }
+
+    async function test(){
+        await write(init_lvgl_code);
+        await write(test_code);
+    }
+
+    function prepare(program){
+        program = program.split("\n");
+        current_program = [];
+        for(line of program){
+            //if(line.trim() != ""){
+            current_program.push(line);
+            //}
+        }
+        program_inprogress = true;
+    }
+
+    async function reset() {
+        await serial.port.setSignals({
+            dataTerminalReady: !1,
+            requestToSend: !0
+        }),
+        await serial.port.setSignals({
+            dataTerminalReady: !1,
+            requestToSend: !1
+        }),
+        await new Promise(e=>setTimeout(e, 1e3));
+    }
+
+    function reset_python(){
+        serial.write("import machine");
+        serial.write("machine.reset()");
+    }
+
+    function ready(){
+        console.log("Micropython restarted");
+    }
+
+    function serial_start(){
+        reset();
+    }
+
+    serial.setStart(serial_start);
+    serial.setRead(serial_read);
+</script>
