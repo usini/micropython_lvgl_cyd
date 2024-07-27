@@ -1,0 +1,15 @@
+{
+    "name": "Micropython LVGL for Cheap Yellow Display",
+    "version": "1",
+    "builds": [
+        {
+            "chipFamily": "ESP32",
+            "parts": [
+                {
+                    "path": "firmware.bin",
+                    "offset": 4096
+                }
+            ]
+        }
+    ]
+}
